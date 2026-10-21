@@ -14,9 +14,6 @@ vec4 permute(vec4 x) {
 vec4 taylorInvSqrt(vec4 r) {
     return 1.79284291400159 - 0.85373472095314 * r;
 }
-vec3 fade(vec3 t) {
-    return t*t*t*(t*(t*6.0-15.0)+10.0);
-}
 float noise(vec3 P) {
     vec3 Pi0 = floor(P); // Integer part for indexing
     vec3 Pi1 = Pi0 + 1.0; // Integer part + 1
@@ -70,7 +67,7 @@ float noise(vec3 P) {
     float n101 = norm1.z * dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
     float n111 = norm1.w * dot(g111, Pf1);
 
-    vec3 fade_xyz = fade(Pf0);
+    vec3 fade_xyz = Pf0*Pf0*Pf0*(Pf0*(Pf0*6.0-15.0)+10.0);
     vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
     vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
     float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x); 
@@ -91,27 +88,54 @@ float fbm(vec2 p, float seed, int octaves) {
         magnitude *= 2.0;
     }
 
-    return n;
+    // OPTIMIZE
+    return n / (1. - pow(2., -float(octaves)));
 }
 
 float mountains(vec2 p, float seed) {
     float v = fbm(p,seed, 5);
     float d = pow(1. - abs(2. * v - 1.), 5.);
 
-    float v2 = fbm(p*6., seed*10., 3);
+    float v2 = fbm(p*6., seed*106., 3);
     float mountainous = pow(v2, 3.);
 
     return pow(d,5.) * mountainous;
 }
 
+vec3 terrain(vec2 uv, float seed) {
+    // Height of the pixel
+    float h = fbm(uv, seed+7532., 8);
+    h += 3.0 * mountains(uv, seed+353.);
+
+    // Temperature of the pixel
+    float t = fbm(uv*0.125, seed+3400., 2);
+    // Humidity of the pixel
+    float w = fbm(uv*0.125, seed+54., 2);
+
+    return vec3(h, t, w);
+}
+
+#define COLD_OCEAN mat2x3(0.0,0.0,0.0, 0.1,1.0,1.0)
+
+bool is_biome(vec3 terrain, mat2x3 biome) {
+    return biome[0].x < terrain.x && terrain.x < biome[1].x
+        && biome[0].y < terrain.y && terrain.y < biome[1].y
+        && biome[0].z < terrain.z && terrain.z < biome[1].z;
+}
+
+int get_biome(vec3 terrain) {
+    bool match = is_biome(terrain, COLD_OCEAN);
+    return match? 1 : 0;
+}
+
 void main() {
     vec2 uv = gl_FragCoord.xy / iResolution.xy;
-    uv *= 2.;
+    uv *= 5.;
 
-    float h = fbm(uv, iTime*0.2, 8);
-    h += 3.0 * mountains(uv, iTime*0.05);
+    vec3 terrain = terrain(uv, iTime);
+    terrain.x *= fbm(uv, iTime+76435.0, 1);
 
+    // gl_FragColor = is_biome(terrain, COLD_OCEAN) ? vec4(1.) : vec4(0.);
 
-    // gl_FragColor = vec4(f.y,f.x*f.y,aprox(f.x,1.,0.001), 1.);
-    gl_FragColor = vec4(vec3(h), 1.);
+    gl_FragColor = vec4(terrain.x, 0., 0., 1.);
 }
