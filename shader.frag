@@ -104,31 +104,48 @@ vec3 terrain(vec2 uv, float seed) {
     return vec3(h*2.0-1.0, t, w);
 }
 
-#define B_COLD_OCEAN mat2(.0, .4, .0, 1.)
+#define B_COLD_OCEAN vec4(.0, .4, .0, 1.)
 #define I_COLD_OCEAN 0x01
+#define B_WARM_OCEAN vec4(.7, 1., .0, 1.)
+#define I_WARM_OCEAN 0x02
+#define B_DESERT vec4(.6, 1., .0, .4)
+#define I_DESERT 0x31
+#define B_SAVANNA vec4(.6, 1., .4, .65)
+#define I_SAVANNA 0x32
+#define B_SWAMP vec4(.0, .3, .8, 1.)
+#define I_SWAMP 0x33
+#define B_TAIGA vec4(.0, .4, .0, .6)
+#define I_TAIGA 0x34
+#define B_ICY vec4(.0, .2, .0, 1.)
+#define I_ICY 0x11
 
 #define BIOME(B, I) if (is_biome(tw, B)) { return I; }
 
-bool is_biome(vec2 tw, mat2 biome) {
-    return biome[0].x <= tw.x && tw.x <= biome[0].y
-        && biome[1].x <= tw.y && tw.y <= biome[1].y;
+bool is_biome(vec2 tw, vec4 biome) {
+    return biome.x <= tw.x && tw.x <= biome.y
+        && biome.z <= tw.y && tw.y <= biome.w;
 }
 
 int get_biome(vec3 htw) {
     vec2 tw = htw.yz;
-    if (htw.x < 0.3) {
+    if (htw.x < 0.15) {
         // Oceans
-        // if (is_biome(tw, B_COLD_OCEAN)) { return I_COLD_OCEAN; }
         BIOME(B_COLD_OCEAN, I_COLD_OCEAN);
+        BIOME(B_WARM_OCEAN, I_WARM_OCEAN);
         return 0x00;
     } else if (htw.x < 0.35) {
         // Shallow
+        BIOME(B_ICY, I_ICY);
         return 0x10;
     } else if (htw.x < 0.41) {
         // Shore
         return 0x20;
     } else if (htw.x < 0.775) {
         // Normal
+        BIOME(B_DESERT, I_DESERT);
+        BIOME(B_SAVANNA, I_SAVANNA);
+        BIOME(B_SWAMP, I_SWAMP);
+        BIOME(B_TAIGA, I_TAIGA);
         return 0x30;
     } else if (htw.x < 0.9) {
         // Mountainous
@@ -144,12 +161,18 @@ vec3 get_color(int biome) {
     switch (biome) {
         case 0x00: return vec3(0.,0.5,1.);
         case I_COLD_OCEAN: return vec3(.0, .0, 1.);
+        case I_WARM_OCEAN: return vec3(.2, .7, 1.);
 
         case 0x10: return vec3(0., 1., 1.);
+        case I_ICY: return vec3(0.5, 1., 1.) * 1.75;
 
-        case 0x20: return vec3(1.,1.,0.);
+        case 0x20: return vec3(1.,1.,0.3) * 1.5;
         
         case 0x30: return vec3(0.,1.,0.);
+        case I_DESERT: return vec3(1., 1., .25) * 1.1;
+        case I_SAVANNA: return vec3(0.8, 1., 0.);
+        case I_SWAMP: return vec3(0.33, 0.52, 0.06);
+        case I_TAIGA: return vec3(0.1, 0.55, 0.16);
         
         case 0x40: return vec3(.5,.5,.5);
         
@@ -162,12 +185,14 @@ vec3 get_color(int biome) {
 
 void main() {
     vec2 uv = gl_FragCoord.xy / iResolution.y;
-    uv *= 5.;
+    uv *= 20.;
     
-    vec3 v = terrain(uv, iTime*0.1);
+    vec3 v = terrain(uv, 77.);
     int biome = get_biome(v*0.5+0.5);
+
+    v.x *= (biome==I_DESERT) ? 0.5 : 1.;
 
     vec3 col = get_color(biome);
 
-    gl_FragColor = vec4(col.rgb * (v.x*0.5+0.55), 1.);
+    gl_FragColor = vec4(col.rgb * ((v.x*0.5+0.50)+0.15), 1.);
 }
