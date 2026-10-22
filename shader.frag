@@ -74,13 +74,13 @@ vec3 noised(vec2 v) {
 }
 
 
-vec2 fbm(vec2 x, float freq_scale, float amp_scale, float k, int octaves) {
+vec2 fbm(vec2 x, float seed, float freq_scale, float amp_scale, float k, int octaves) {
     float a = 0.0;
     float amp = 0.5;
     vec2  d = vec2(0.0);
     mat2  m = mat2(1.0,0.0,0.0,1.0);
     for (int i=0 ; i<octaves ; i++) {
-        vec3 n = noised(x);
+        vec3 n = noised(x + mod289(vec2(seed, seed)));
         a += amp*n.x;          // accumulate values		
         a *= 1.0 / (1.0 - k * length(d));
         d += amp*m*n.yz;       // accumulate derivatives
@@ -94,21 +94,72 @@ vec2 fbm(vec2 x, float freq_scale, float amp_scale, float k, int octaves) {
 
 
 vec3 terrain(vec2 uv, float seed) {
-    float h = fbm(uv, 2.4, 0.4, 0.0005, 8).x;
-    float t = fbm(uv * 0.1, 2.0, 0.5, 0.0001, 3).x;
-    float w = fbm(uv * 0.1, 2.0, 0.5, 0.0001, 3).x;
+    float h = fbm(uv,       seed, 2.4, 0.4, 0.0005, 8).x*0.5+0.5;
+    float t = fbm(uv * 0.1, seed+1., 2.0, 0.5, 0.0001, 3).x;
+    float w = fbm(uv * 0.1, seed+2., 2.0, 0.5, 0.0001, 3).x;
+    float ocean = fbm(uv/5., seed+3., 2., 0.5, 0.0005, 2).x;
+    ocean = 0.05*ocean + 0.95*smoothstep(-0.25, 0.25, ocean);
+    h = pow(sqrt(h)*0.5+0.5,3.0)*ocean;
 
-    return vec3(h, t, w);
+    return vec3(h*2.0-1.0, t, w);
 }
 
+#define COLD_OCEAN mat2(-1.0, -0.4, -1.0, 1.0)
+
+bool is_biome(vec2 tw, mat2 biome) {
+    return biome[0].x <= tw.x && tw.x <= biome[0].y
+        && biome[1].x <= tw.y && tw.y <= biome[1].y;
+}
+
+int get_biome(vec3 htw) {
+    vec2 tw = htw.yz;
+    if (htw.x < -0.01) {
+        // Deep oceans
+        return 0x00;
+    } else if (htw.x < 0.35) {
+        // Oceans
+        if (is_biome(tw, COLD_OCEAN)) { return 0x00; }
+        return 0x10;
+    } else if (htw.x < 0.41) {
+        // Shore
+        return 0x20;
+    } else if (htw.x < 0.8) {
+        // Normal
+        return 0x30;
+    } else {
+        // Mountainous (0x3_)
+        return 0x40;
+    }
+    return -1;
+}
+
+vec3 get_color(int biome) {
+    switch (biome) {
+        case 0x00:
+            return vec3(0.,0.,0.5);
+            break;
+        case 0x10:
+            return vec3(0.,0.,1.);
+        case 0x20:
+            return vec3(1.,1.,0.);
+            break;
+        case 0x30:
+            return vec3(0.,1.,0.);
+            break;
+        case 0x40:
+            return vec3(1.,1.,1.);
+            break;
+    }
+}
 
 void main() {
     vec2 uv = gl_FragCoord.xy / iResolution.xy;
-    // uv *= 5.;
+    uv *= 10.;
     
-    vec3 v = terrain(uv);
+    vec3 v = terrain(uv, iTime*0.1);
+    int biome = get_biome(v*0.5+0.5);
 
+    vec3 col = get_color(biome);
 
-    gl_FragColor = vec4(v.xyz, 1.);
-    // gl_FragColor = vec4(v.xxx, 1.);
+    gl_FragColor = vec4(col * (v.x*0.5+0.5), 1.);
 }
