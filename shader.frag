@@ -1,8 +1,10 @@
 precision highp float;
 
 #define SCALE 10.
-#define CONTINENTAL
+// #define CONTINENTAL
 #define CONTINENTNESS 1.75
+// #define RIVERS
+#define OCEANS
 
 vec3 mod289(vec3 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
@@ -99,14 +101,26 @@ vec2 fbm(vec2 x, float seed, float freq_scale, float amp_scale, float k, int oct
 
 vec3 terrain(vec2 uv, float seed) {
     float h = fbm(uv,       seed, 2.4, 0.4, 0.0005, 8).x*0.5+0.5;
+    h = pow(sqrt(h)*0.5+0.5,3.0);
     #ifdef CONTINENTAL
         h *= 1.0-length(uv*CONTINENTNESS/SCALE);
     #endif
     float t = fbm(uv * 0.1, seed+1., 2.0, 0.5, 0.0001, 4).x;
     float w = fbm(uv * 0.1, seed+2., 2.0, 0.5, 0.0001, 4).x;
-    float ocean = fbm(uv/5., seed+3., 2., 0.5, 0.0005, 2).x;
-    ocean = 0.05*ocean + 0.95*smoothstep(-0.25, 0.25, ocean);
-    h = pow(sqrt(h)*0.5+0.5,3.0)*ocean;
+    #ifdef OCEANS
+        float ocean = fbm(uv/5., seed+3., 2., 0.5, 0.0005, 2).x;
+        ocean = 0.05*ocean + 0.95*smoothstep(-0.25, 0.25, ocean);
+        h *= ocean;
+    #endif
+    #ifdef RIVERS
+        float rivers = fbm(uv*0.5, seed+53765., 2.0, 0.5, 0.0001, 4).x*0.5+0.5;
+        rivers = smoothstep(0.85, 1.0, 1. - abs(2. * rivers - 1.))*0.35;
+        #ifdef OCEANS
+            rivers *= ocean;
+        #endif
+        h -= rivers;
+    #endif
+    
 
     return vec3(h*2.0-1.0, t, w);
 }
@@ -276,6 +290,10 @@ void main() {
     col = col * ((v.x*0.5+0.50)+0.15) * step(foliage.w, 0.5);
     foliage = vec4(foliage.rgb * step(0.5, foliage.w), foliage.w);
 
+    // float rivers = fbm(uv*0.3, seed+53765., 2.0, 0.5, 0.0001, 2).x*0.5+0.5;
+    // rivers = pow(1. - abs(2. * rivers - 1.), 10.0);
+    // h -= rivers;
+
     gl_FragColor = vec4(col + foliage.rgb, 1.);
-    // gl_FragColor = vec4(, 0., 0., 1.);
+    // gl_FragColor = vec4(rivers, 0., 0., 1.);
 }
