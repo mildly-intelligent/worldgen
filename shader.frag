@@ -5,6 +5,19 @@ precision highp float;
 #define CONTINENTNESS 1.75
 // #define RIVERS
 #define OCEANS
+// 0 - time SEASON; 1 - always summer; 2 - always fall; 3 - always winter; 4 - always spring
+#define SEASON SPRING
+
+
+#define SUMMER 1
+#define AUTUMN 2
+#define WINTER 3
+#define SPRING 4
+#define TIMED  0
+
+#ifndef SEASON
+    #define SEASON SPRING
+#endif
 
 vec3 mod289(vec3 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
@@ -203,11 +216,11 @@ vec3 get_color(int biome) {
         case 0x20: return vec3(1.,1.,0.3) * 1.5;
         
         case 0x30: return vec3(0.4,1.,0.);
-        case I_DESERT: return vec3(1., 1., .25) * 1.1;
+        case I_DESERT: return vec3(1., 1., .3) * 1.2;
         case I_SAVANNA: return vec3(0.8, 1., 0.);
         case I_SWAMP: return vec3(0.33, 0.52, 0.06);
         case I_TAIGA: return vec3(0.15, 0.7, 0.35);
-        case I_SNOWY: return vec3(0.8, 0.9, 1.);
+        case I_SNOWY: return vec3(0.8, 0.9, 1.) * 1.35;
         case I_FOREST: return vec3(0.05, 0.7, 0.06);
         case I_FIELD: return vec3(0.4, 1., 0.);
         
@@ -219,19 +232,29 @@ vec3 get_color(int biome) {
     }
 }
 
-// https://github.com/hughsk/glsl-hsv2rgb/blob/master/index.glsl
-vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
 
+vec4 get_trees(float v2, int season) {
+    if (season == TIMED) {
+        season = int(iTime * 0.1) % 4 + 1;
+    }
+    switch (season) {
+        case SUMMER:
+            return vec4(0.1, 0.9, 0.0, 1.);
+        case AUTUMN:
+            return vec4(1.0, floor(v2*4.)*0.25, 0.0, 1.);
+        case WINTER:
+            return vec4(0.7, 0.75, 0.8, 1.);
+        case SPRING:
+            return vec4(0.4, 1.0, 0.0, 1.);
+    }
+}
 vec4 get_foliage(vec2 uv, int biome, float seed) {
     float v1;
     float v2;
     
     switch (biome) {
         case I_CORAL:
+            // Corals
             v1 = fbm(uv, seed+39753., 2.0, 0.5, 0.0001, 4).x*0.5+0.5;
             v2 = fbm(uv, seed+62457., 2.5, 0.5, 0.0003, 2).x*0.5+0.6;
             vec3 coral;
@@ -249,9 +272,11 @@ vec4 get_foliage(vec2 uv, int biome, float seed) {
             v2 = step(0.4, v2*v2*v2);
             return vec4(coral * v2, v2);
         case I_ICY:
+            // Ice spikes
             v1 = fbm(uv, seed+39753., 2.0, 0.5, 0.0001, 4).x*0.5+0.5;
             return (step(0.25, v1) == 0.) ? vec4(0.6, 0.8, 1., 0.666)*1.5 : vec4(0.0);
         case I_FIELD:
+            // Flowers
             v1 = fbm(uv * 11., seed + 635., 2.0, 0.5, 0.0001, 1).x*0.5+0.5;
             v2 = fbm(uv * 10., seed+363425., 1., 1., 0.0001, 4).x + 0.25;
             vec3 flower;
@@ -268,6 +293,18 @@ vec4 get_foliage(vec2 uv, int biome, float seed) {
             }
             v2 *= v2*v2;
             return vec4(flower, step(0.99, v2));
+        case I_TAIGA: case I_SNOWY:
+            // Evergreen trees
+            v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 3).x*0.5+0.45;
+            return (step(0.6, v1)==1.) ? vec4(0.0, 0.45, 0.1, 1.0) : vec4(0.0);
+        case I_DESERT:
+            // Cactuses
+            v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 4).x*0.5+0.35;
+            return (step(0.6, v1)==1.) ? vec4(0.0, 0.45, 0.1, 1.0) : vec4(0.0);
+        case I_FOREST:
+            v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 3).x*0.5+0.45;
+            v2 = fbm(uv * 5., seed + 5743., 2.0, 0.5, 0.001, 3).x*0.5+0.5;
+            return (step(0.45, v1)==1.) ? get_trees(v2, SEASON) : vec4(0.0);
 
         default: return vec4(0.0);
     }
@@ -277,7 +314,8 @@ void main() {
     vec2 uv = (gl_FragCoord.xy - iResolution.xy * 0.5) / iResolution.y;
     uv *= SCALE;
     
-    float seed = iTime * 0.1;
+    // float seed = iTime * 0.1;
+    float seed = 53543.;
 
     vec3 v = terrain(uv, seed);
     int biome = get_biome(v*0.5+0.5);
