@@ -5,29 +5,29 @@ precision highp float;
 /* Make there be more land in the center of the screen */
 // #define CONTINENTAL
   /* Higher values will make the land more concentrated in the center */
-  #define CONTINENTNESS 1.75
+  #define CONTINENTNESS 1.25
 /* Creates rivers (Warning: Looks wrong with CONTINENTAL enabled)*/
 // #define RIVERS
 /* Breaks up the land with large oceans */
 #define OCEANS
-/* Either SUMMER, FALL/AUTUMN, WINTER, SPRING, DEFAULT (summer), TIMED (changes over time) */
-#define SEASON FALL
+/* Weather to have trees, coral, etc. */
+#define FOLIAGE
+    #define TREES
+    #define FLOWERS
+    #define CACTUSES
+    #define CORAL
+    #define ICE_SPIKES
+    /* Either SUMMER, FALL/AUTUMN, WINTER, SPRING, TIMED (changes over time) */
+    #define SEASON FALL
 /* Enables clouds */
 #define CLOUDS
-/* Causes the shorling to recede occasionally */
+/* Causes the shoreline to recede occasionally */
 #define TIDE
 
-#define SEED 26245.
+// Warning: a high seed value will cause the clouds to jitter
+#define SEED 26573.
 /* #endregion */
 
-
-#define SUMMER 1
-#define DEFAULT SUMMER
-#define AUTUMN 2
-#define FALL AUTUMN
-#define WINTER 3
-#define SPRING 4
-#define TIMED  0
 
 // Maps a number from one range to another
 float map(float x, float a1, float a2, float b1, float b2) {
@@ -138,6 +138,7 @@ vec2 fbm(vec2 x, float seed, int octaves) {
 }
 /* #endregion */
 
+// Generates terrain height, temperature, and humidity packed into a vec3
 vec3 terrain(vec2 uv, float seed) {
     float h = fbm(uv, seed, 2.4, 0.4, 0.0005, 8).x*0.5+0.5;
     h = pow(sqrt(h)*0.5+0.5,3.0);
@@ -152,7 +153,7 @@ vec3 terrain(vec2 uv, float seed) {
         h *= ocean;
     #endif
     #ifdef RIVERS
-        float rivers = fbm(uv*0.5, seed+53765., 4).x*0.5+0.5;
+        float rivers = fbm(uv*0.4, seed+53765., 4).x*0.5+0.5;
         rivers = smoothstep(0.85, 1.0, 1. - abs(2. * rivers - 1.))*0.35;
         #ifdef OCEANS
             rivers *= ocean;
@@ -171,8 +172,8 @@ vec3 terrain(vec2 uv, float seed) {
 #define I_WARM_OCEAN 0x02
 #define B_ICY vec4(.0, .3, .0, 1.)
 #define I_ICY 0x11
-#define B_CORAL vec4(.7, 1., .0, 1.)
-#define I_CORAL 0x12
+#define B_CORAL_REEF vec4(.7, 1., .0, 1.)
+#define I_CORAL_REEF 0x12
 #define B_DESERT vec4(.6, 1., .0, .4)
 #define I_DESERT 0x31
 #define B_SAVANNA vec4(.6, 1., .4, .65)
@@ -191,11 +192,13 @@ vec3 terrain(vec2 uv, float seed) {
 #define BIOME(B, I) if (is_biome(tw, B)) { return I; }
 /* #endregion */
 
+// Checks if a temperature and humidity value correspond to a biome
 bool is_biome(vec2 tw, vec4 biome) {
     return biome.x <= tw.x && tw.x <= biome.y
         && biome.z <= tw.y && tw.y <= biome.w;
 }
 
+// Gets the biome based off of the height, temperature, and humidity
 int get_biome(vec3 htw) {
     vec2 tw = htw.yz;
     #ifdef TIDE
@@ -211,7 +214,7 @@ int get_biome(vec3 htw) {
     } else if (htw.x < shoreline) {
         // Shallow
         BIOME(B_ICY, I_ICY);
-        BIOME(B_CORAL, I_CORAL);
+        BIOME(B_CORAL_REEF, I_CORAL_REEF);
         return 0x10;
     } else if (htw.x < 0.41) {
         // Shore
@@ -236,6 +239,7 @@ int get_biome(vec3 htw) {
     return -1;
 }
 
+// Gets the color a biome should be
 vec3 get_color(int biome) {
     switch (biome) {
         case 0x00: return vec3(0.,0.5,1.);
@@ -244,7 +248,7 @@ vec3 get_color(int biome) {
 
         case 0x10: return vec3(0., 0.8, 1.);
         case I_ICY: return vec3(0.7, 0.9, 1.)*1.25;
-        case I_CORAL: return vec3(.2, 1., 1.);
+        case I_CORAL_REEF: return vec3(.2, 1., 1.);
 
         case 0x20: return vec3(1.,1.,0.3) * 1.5;
         
@@ -261,10 +265,21 @@ vec3 get_color(int biome) {
         
         case 0x50: return vec3(1.,1.,1.);
         
-        default: return vec3(1e100, 0., 1e100);
+        // Magenta if biome is missing
+        default: return vec3(1e25, 0., 1e25);
     }
 }
 
+#define SUMMER 1
+#define AUTUMN 2
+#define FALL AUTUMN
+#define WINTER 3
+#define SPRING 4
+#define TIMED  0
+#ifndef SEASON
+  #define SEASON SUMMER
+#endif
+// Returns a tree color based off season
 vec4 get_trees(float v2, int season) {
     if (season == TIMED) {
         season = int(iTime * 0.1) % 4 + 1;
@@ -281,12 +296,14 @@ vec4 get_trees(float v2, int season) {
     }
 }
 
+// Gets biome specific foliage, the w value tells if foliage should be drawn
 vec4 get_foliage(vec2 uv, int biome, float seed) {
     float v1;
     float v2;
     
     switch (biome) {
-        case I_CORAL:
+      #ifdef CORAL
+        case I_CORAL_REEF:
             // Corals
             v1 = fbm(uv, seed+39753., 2.0, 0.5, 0.0001, 4).x*0.5+0.5;
             v2 = fbm(uv, seed+62457., 2.5, 0.5, 0.0003, 2).x*0.5+0.6;
@@ -304,6 +321,8 @@ vec4 get_foliage(vec2 uv, int biome, float seed) {
             }
             v2 = step(0.4, v2*v2*v2);
             return vec4(coral * v2, v2);
+      #endif
+      #ifdef ICE_SPIKES
         case I_ICY:
             // Ice spikes
             v1 = fbm(uv, seed+39753., 2.0, 0.5, 0.0001, 4).x*0.5+0.5;
@@ -326,20 +345,25 @@ vec4 get_foliage(vec2 uv, int biome, float seed) {
             }
             v2 *= v2*v2;
             return vec4(flower, step(0.99, v2));
+      #endif
+      #ifdef TREES
         case I_TAIGA: case I_SNOWY:
             // Evergreen trees
             v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 3).x*0.5+0.45;
-            return (step(0.6, v1)==1.) ? vec4(0.0, 0.45, 0.1, 1.0) : vec4(0.0);
-        case I_DESERT:
-            // Cactuses
-            v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 4).x*0.5+0.35;
             return (step(0.6, v1)==1.) ? vec4(0.0, 0.45, 0.1, 1.0) : vec4(0.0);
         case I_FOREST:
             v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 3).x*0.5+0.45;
             v2 = fbm(uv * 5., seed + 5743., 2.0, 0.5, 0.001, 3).x*0.5+0.5;
             return (step(0.45, v1)==1.) ? get_trees(v2, SEASON) : vec4(0.0);
+      #endif
+      #ifdef CACTUSES
+        case I_DESERT:
+            // Cactuses
+            v1 = fbm(uv * 3., seed + 635., 2.0, 0.5, 0.0001, 4).x*0.5+0.35;
+            return (step(0.6, v1)==1.) ? vec4(0.0, 0.45, 0.1, 1.0) : vec4(0.0);
 
         default: return vec4(0.0);
+      #endif
     }
 }
 
@@ -356,14 +380,17 @@ void main() {
     vec3 v = terrain(uv, SEED);
     int biome = get_biome(v*0.5+0.5);
 
+    // Desert has less intense heights
     v.x *= (biome==I_DESERT) ? 0.5 : 1.;
 
-    vec3 col = get_color(biome);
-    vec4 foliage = get_foliage(uv, biome, SEED+365465.);
+    vec3 col = get_color(biome) * ((v.x*0.5+0.50)+0.15);
 
-    col = col * ((v.x*0.5+0.50)+0.15) * step(foliage.w, 0.5);
-    foliage = vec4(foliage.rgb * step(0.5, foliage.w), foliage.w);
-    col += foliage.rgb;
+    #ifdef FOLIAGE
+        vec4 foliage = get_foliage(uv, biome, SEED+365.);
+        foliage.w = step(0.5, foliage.w);
+        col *= 1. - foliage.w;
+        col += foliage.rgb * foliage.w;
+    #endif
 
     #ifdef CLOUDS
         float cloud = get_clouds(uv, SEED+55.);
@@ -371,5 +398,4 @@ void main() {
     #endif
 
     gl_FragColor = vec4(col, 1.);
-    // gl_FragColor = vec4(rivers, 0., 0., 1.);
 }
