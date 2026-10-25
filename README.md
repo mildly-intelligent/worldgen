@@ -27,5 +27,6 @@ Settings that can be tweaked:
   - `CORAL (toggle)`: Puts coral in the `CORAL_REEF` biome.
   - `ICE_SPIKES (toggle)`: Puts ice spikes in the `ICY` biome.
   - `SEASON <ENUM>`: Can be one of `SUMMER`, `FALL/AUTUMN`, `WINTER`, `SPRING`, or `TIMED`. If set to `TIMED`, seasons will change over time, if commented out, the season will be summer.
+  - `MESA_LAYERS <LIST[INT]>`: A list of numbers corresponding to the layer colors of the `MESA` biome
 - `CLOUDS (toggle)`: Enables clouds.
 - `TIDE (toggle)`: Creates a tide that moves the shoreline.
