@@ -1,11 +1,20 @@
 precision highp float;
 
 #define SCALE 10.
+/* Make there be more land in the center of the screen */
 // #define CONTINENTAL
-#define CONTINENTNESS 1.75
-#define RIVERS
+    /* Higher values will make the land more concentrated in the center */
+    #define CONTINENTNESS 1.75
+/* Creates rivers (Warning: Looks wrong with CONTINETAL enabled)*/
+// #define RIVERS
+/* Breaks up the land with large oceans */
 #define OCEANS
+/* Either SUMMER, FALL/AUTUMN, WINTER, SPRING, DEFAULT (summer), TIMED (changes over time) */
 #define SEASON AUTUMN
+/* Enables clouds */
+#define CLOUDS
+
+#define SEED 26245.
 
 
 #define SUMMER 1
@@ -15,10 +24,6 @@ precision highp float;
 #define WINTER 3
 #define SPRING 4
 #define TIMED  0
-
-#ifndef SEASON
-    #define SEASON SPRING
-#endif
 
 /* #region Noise */
 // This code is not mine (I'm not smart enough for allat),
@@ -85,7 +90,6 @@ float noise(vec2 v) {
 }
 /* #endregion */
 
-
 /* #region Fractal Brownian Motion */
 // This code is about 50% mine but comes from Inigo Quilez here:
 // https://www.shadertoy.com/view/4ttSWf > Buffer A > Lines 196-199 + 280-925
@@ -148,6 +152,7 @@ vec3 terrain(vec2 uv, float seed) {
     return vec3(h*2.0-1.0, t, w);
 }
 
+/* #region Biome definitions */
 #define B_COLD_OCEAN vec4(.0, .4, .0, 1.)
 #define I_COLD_OCEAN 0x01
 #define B_WARM_OCEAN vec4(.7, 1., .0, 1.)
@@ -172,6 +177,7 @@ vec3 terrain(vec2 uv, float seed) {
 #define I_FIELD 0x37
 
 #define BIOME(B, I) if (is_biome(tw, B)) { return I; }
+/* #endregion */
 
 bool is_biome(vec2 tw, vec4 biome) {
     return biome.x <= tw.x && tw.x <= biome.y
@@ -258,6 +264,7 @@ vec4 get_trees(float v2, int season) {
             return vec4(0.4, 1.0, 0.0, 1.);
     }
 }
+
 vec4 get_foliage(vec2 uv, int biome, float seed) {
     float v1;
     float v2;
@@ -320,28 +327,31 @@ vec4 get_foliage(vec2 uv, int biome, float seed) {
     }
 }
 
+float get_clouds(vec2 uv, float seed) {
+    float h = fbm(uv*0.3, seed+iTime, 2.0, 0.5, 0.0001, 6).x*0.5+0.5;
+    h *= 0.4;
+    return h;
+}
+
 void main() {
     vec2 uv = (gl_FragCoord.xy - iResolution.xy * 0.5) / iResolution.y;
     uv *= SCALE;
-    
-    // float seed = iTime * 0.1;
-    float seed = 53543.;
 
-    vec3 v = terrain(uv, seed);
+    vec3 v = terrain(uv, SEED);
     int biome = get_biome(v*0.5+0.5);
 
     v.x *= (biome==I_DESERT) ? 0.5 : 1.;
 
     vec3 col = get_color(biome);
-    vec4 foliage = get_foliage(uv, biome, seed + 365465.);
+    vec4 foliage = get_foliage(uv, biome, SEED+365465.);
 
     col = col * ((v.x*0.5+0.50)+0.15) * step(foliage.w, 0.5);
     foliage = vec4(foliage.rgb * step(0.5, foliage.w), foliage.w);
+    col += foliage.rgb;
 
-    // float rivers = fbm(uv*0.3, seed+53765., 2.0, 0.5, 0.0001, 2).x*0.5+0.5;
-    // rivers = pow(1. - abs(2. * rivers - 1.), 10.0);
-    // h -= rivers;
+    float cloud = get_clouds(uv, SEED+57824375.);
+    col = mix(col, vec3(1.), cloud);
 
-    gl_FragColor = vec4(col + foliage.rgb, 1.);
+    gl_FragColor = vec4(col, 1.);
     // gl_FragColor = vec4(rivers, 0., 0., 1.);
 }
