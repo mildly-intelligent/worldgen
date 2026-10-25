@@ -21,15 +21,37 @@ precision highp float;
     #define ICE_SPIKES
     /* Either SUMMER, FALL/AUTUMN, WINTER, SPRING, TIMED (changes over time) */
     #define SEASON FALL
-/* Enables clouds */
-// #define CLOUDS
+    #define MESA_LAYERS int[11](1,5,2,6,5,0,2,7,4,6,7)
+/* Cloud intensity, comment to disable clouds */
+#define CLOUDS 1.
 /* Causes the shoreline to recede occasionally */
-// #define TIDE
+#define TIDE
 
 // Warning: a high seed value will cause the clouds to jitter
 #define SEED 47578.001
 /* #endregion */
 
+/* #region Macro Values */
+// Color credit to: https://colorswall.com/palette/149776
+#define WHITE_TERRACOTTA vec3(0.82, 0.69, 0.63)
+#define ORANGE_TERRACOTTA vec3(0.62, 0.32, 0.14)
+#define YELLOW_TERRACOTTA vec3(0.72, 0.51, 0.13)
+#define GRAY_TERRACOTTA vec3(0.23, 0.17, 0.14)
+#define LIGHT_GRAY_TERRACOTTA vec3(0.53, 0.42, 0.38)
+#define BROWN_TERRACOTTA vec3(0.31, 0.21, 0.14)
+#define RED_TERRACOTTA vec3(0.55, 0.23, 0.18)
+#define BLACK_TERRACOTTA vec3(0.15, 0.09, 0.06)
+
+#define SUMMER 1
+#define AUTUMN 2
+#define FALL AUTUMN
+#define WINTER 3
+#define SPRING 4
+#define TIMED  0
+#ifndef SEASON
+  #define SEASON SUMMER
+#endif
+/* #endregion */
 
 // Maps a number from one range to another
 float map(float x, float a1, float a2, float b1, float b2) {
@@ -275,6 +297,7 @@ vec3 get_color(int biome) {
         case I_SNOWY: return vec3(0.8, 0.9, 1.) * 1.35;
         case I_FOREST: return vec3(0.05, 0.7, 0.06);
         case I_FIELD: return vec3(0.4, 1., 0.);
+        case I_MESA: return ORANGE_TERRACOTTA;
         
         case 0x40: return vec3(.5,.5,.5);
         
@@ -285,15 +308,6 @@ vec3 get_color(int biome) {
     }
 }
 
-#define SUMMER 1
-#define AUTUMN 2
-#define FALL AUTUMN
-#define WINTER 3
-#define SPRING 4
-#define TIMED  0
-#ifndef SEASON
-  #define SEASON SUMMER
-#endif
 // Returns a tree color based off season
 vec4 get_trees(float v2, int season) {
     if (season == TIMED) {
@@ -337,32 +351,32 @@ vec3 get_flowers(float v1) {
         return vec3(0.7, 0.5, 0.902);
     }
 }
-
-
-// Color credit to: https://colorswall.com/palette/149776
-#define WHITE_TERRACOTTA vec3(0.82, 0.69, 0.63)
-#define ORANGE_TERRACOTTA vec3(0.62, 0.32, 0.14)
-#define YELLOW_TERRACOTTA vec3(0.72, 0.51, 0.13)
-#define GRAY_TERRACOTTA vec3(0.23, 0.17, 0.14)
-#define LIGHT_GRAY_TERRACOTTA vec3(0.53, 0.42, 0.38)
-#define BROWN_TERRACOTTA vec3(0.31, 0.21, 0.14)
-#define RED_TERRACOTTA vec3(0.55, 0.23, 0.18)
-#define BLACK_TERRACOTTA vec3(0.15, 0.09, 0.06)
+vec3 get_striation(int i) {
+    switch (i) {
+        case 0: return WHITE_TERRACOTTA;
+        case 1: return ORANGE_TERRACOTTA;
+        case 2: return YELLOW_TERRACOTTA;
+        case 3: return GRAY_TERRACOTTA;
+        case 4: return LIGHT_GRAY_TERRACOTTA;
+        case 5: return BROWN_TERRACOTTA;
+        case 6: return RED_TERRACOTTA;
+        case 7: return BLACK_TERRACOTTA;
+    }
+}
 vec3 get_mesa_striations(float h, float seed) {
     // h can be 0.0 - 0.35
-    if      (h < .025)  { return ORANGE_TERRACOTTA; }
-    else if (h < .05)   { return BROWN_TERRACOTTA; }
-    else if (h < .1)    { return YELLOW_TERRACOTTA; }
-    else if (h < .15)   { return RED_TERRACOTTA; }
-    else if (h < .2)    { return BROWN_TERRACOTTA; }
-    else if (h < .225)  { return WHITE_TERRACOTTA; }
-    else if (h < .25)   { return YELLOW_TERRACOTTA; }
-    else if (h < .3)    { return BLACK_TERRACOTTA; }
-    else if (h < .335)   { return LIGHT_GRAY_TERRACOTTA; }
-    else if (h < .349)  { return RED_TERRACOTTA; }
-    else                { return BLACK_TERRACOTTA; }
+    if      (h < .025)  { return get_striation(MESA_LAYERS[0]); }
+    else if (h < .05)   { return get_striation(MESA_LAYERS[1]); }
+    else if (h < .1)    { return get_striation(MESA_LAYERS[2]); }
+    else if (h < .15)   { return get_striation(MESA_LAYERS[3]); }
+    else if (h < .2)    { return get_striation(MESA_LAYERS[4]); }
+    else if (h < .225)  { return get_striation(MESA_LAYERS[5]); }
+    else if (h < .25)   { return get_striation(MESA_LAYERS[6]); }
+    else if (h < .3)    { return get_striation(MESA_LAYERS[7]); }
+    else if (h < .335)  { return get_striation(MESA_LAYERS[8]); }
+    else if (h < .349)  { return get_striation(MESA_LAYERS[9]); }
+    else                { return get_striation(MESA_LAYERS[10]); }
 }
-
 // Gets biome specific foliage, the w value tells if foliage should be drawn
 vec4 get_foliage(vec2 uv, float h, int biome, float seed) {
     float v1;
