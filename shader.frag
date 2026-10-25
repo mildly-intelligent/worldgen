@@ -1,20 +1,24 @@
 precision highp float;
 
+/* #region Settings */
 #define SCALE 10.
 /* Make there be more land in the center of the screen */
 // #define CONTINENTAL
-    /* Higher values will make the land more concentrated in the center */
-    #define CONTINENTNESS 1.75
-/* Creates rivers (Warning: Looks wrong with CONTINETAL enabled)*/
+  /* Higher values will make the land more concentrated in the center */
+  #define CONTINENTNESS 1.75
+/* Creates rivers (Warning: Looks wrong with CONTINENTAL enabled)*/
 // #define RIVERS
 /* Breaks up the land with large oceans */
 #define OCEANS
 /* Either SUMMER, FALL/AUTUMN, WINTER, SPRING, DEFAULT (summer), TIMED (changes over time) */
-#define SEASON AUTUMN
+#define SEASON FALL
 /* Enables clouds */
 #define CLOUDS
+/* Causes the shorling to recede occasionally */
+#define TIDE
 
 #define SEED 26245.
+/* #endregion */
 
 
 #define SUMMER 1
@@ -24,6 +28,11 @@ precision highp float;
 #define WINTER 3
 #define SPRING 4
 #define TIMED  0
+
+// Maps a number from one range to another
+float map(float x, float a1, float a2, float b1, float b2) {
+    return (x-a1)/(a2-a1)*(b2-b1)+b1;
+}
 
 /* #region Noise */
 // This code is not mine (I'm not smart enough for allat),
@@ -113,7 +122,7 @@ vec2 fbm(vec2 x, float seed, float freq_scale, float amp_scale, float k, int oct
     vec2  d = vec2(0.0);
     mat2  m = mat2(1.0,0.0,0.0,1.0);
     for (int i=0 ; i<octaves ; i++) {
-        vec3 n = noised(x + mod289(vec2(seed, seed)));
+        vec3 n = noised(x + mod289(vec2(seed)));
         a += amp*n.x;          // accumulate values		
         a *= 1.0 / (1.0 - k * length(d));
         d += amp*m*n.yz;       // accumulate derivatives
@@ -124,23 +133,26 @@ vec2 fbm(vec2 x, float seed, float freq_scale, float amp_scale, float k, int oct
 
 	return vec2(a, length(d)*0.01);
 }
+vec2 fbm(vec2 x, float seed, int octaves) {
+    return fbm(x, seed, 1.98, 0.47, 0.0005, octaves);
+}
 /* #endregion */
 
 vec3 terrain(vec2 uv, float seed) {
-    float h = fbm(uv,       seed, 2.4, 0.4, 0.0005, 8).x*0.5+0.5;
+    float h = fbm(uv, seed, 2.4, 0.4, 0.0005, 8).x*0.5+0.5;
     h = pow(sqrt(h)*0.5+0.5,3.0);
     #ifdef CONTINENTAL
         h *= 1.0-length(uv*CONTINENTNESS/SCALE);
     #endif
-    float t = fbm(uv * 0.1, seed+1., 2.0, 0.5, 0.0001, 4).x;
-    float w = fbm(uv * 0.1, seed+2., 2.0, 0.5, 0.0001, 4).x;
+    float t = fbm(uv * 0.1, seed+1542., 4).x;
+    float w = fbm(uv * 0.1, seed+27465., 4).x;
     #ifdef OCEANS
-        float ocean = fbm(uv/5., seed+3., 2., 0.5, 0.0005, 2).x;
+        float ocean = fbm(uv/5., seed+327465., 2).x;
         ocean = 0.05*ocean + 0.95*smoothstep(-0.25, 0.25, ocean);
         h *= ocean;
     #endif
     #ifdef RIVERS
-        float rivers = fbm(uv*0.5, seed+53765., 2.0, 0.5, 0.0001, 4).x*0.5+0.5;
+        float rivers = fbm(uv*0.5, seed+53765., 4).x*0.5+0.5;
         rivers = smoothstep(0.85, 1.0, 1. - abs(2. * rivers - 1.))*0.35;
         #ifdef OCEANS
             rivers *= ocean;
@@ -186,12 +198,17 @@ bool is_biome(vec2 tw, vec4 biome) {
 
 int get_biome(vec3 htw) {
     vec2 tw = htw.yz;
+    #ifdef TIDE
+        float shoreline = map(sin(iTime), -1.0,1.0, 0.3,0.36);
+    #else
+        float shoreline = 0.35;
+    #endif
     if (htw.x < 0.125) {
         // Oceans
         BIOME(B_COLD_OCEAN, I_COLD_OCEAN);
         BIOME(B_WARM_OCEAN, I_WARM_OCEAN);
         return 0x00;
-    } else if (htw.x < 0.35) {
+    } else if (htw.x < shoreline) {
         // Shallow
         BIOME(B_ICY, I_ICY);
         BIOME(B_CORAL, I_CORAL);
@@ -248,20 +265,19 @@ vec3 get_color(int biome) {
     }
 }
 
-
 vec4 get_trees(float v2, int season) {
     if (season == TIMED) {
         season = int(iTime * 0.1) % 4 + 1;
     }
     switch (season) {
         case SUMMER:
-            return vec4(0.1, 0.9, 0.0, 1.);
+            return vec4(0.3, 0.85, 0.0, 1.);
         case AUTUMN:
             return vec4(1.0, floor(v2*4.)*0.25, 0.0, 1.);
         case WINTER:
-            return vec4(0.7, 0.75, 0.8, 1.);
+            return vec4(0.7, 0.75, 0.85, 1.);
         case SPRING:
-            return vec4(0.4, 1.0, 0.0, 1.);
+            return vec4(0.4, 0.7, 0.0, 1.);
     }
 }
 
@@ -328,8 +344,8 @@ vec4 get_foliage(vec2 uv, int biome, float seed) {
 }
 
 float get_clouds(vec2 uv, float seed) {
-    float h = fbm(uv*0.3, seed+iTime, 2.0, 0.5, 0.0001, 6).x*0.5+0.5;
-    h *= 0.4;
+    float h = fbm(uv*0.3, seed+iTime*0.25, 2.5, 0.4, 0.0005, 6).x*0.5+0.5;
+    h *= h*0.7;
     return h;
 }
 
@@ -349,8 +365,10 @@ void main() {
     foliage = vec4(foliage.rgb * step(0.5, foliage.w), foliage.w);
     col += foliage.rgb;
 
-    float cloud = get_clouds(uv, SEED+57824375.);
-    col = mix(col, vec3(1.), cloud);
+    #ifdef CLOUDS
+        float cloud = get_clouds(uv, SEED+55.);
+        col = mix(col, vec3(1.), cloud);
+    #endif
 
     gl_FragColor = vec4(col, 1.);
     // gl_FragColor = vec4(rivers, 0., 0., 1.);
